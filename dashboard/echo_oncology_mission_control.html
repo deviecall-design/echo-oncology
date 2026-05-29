@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Echo Oncology Mission Control</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@latest"></script>
+    <style>
+        * { --color-critical: #ef4444; --color-warning: #f59e0b; --color-success: #10b981; --color-info: #3b82f6; }
+        body { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #e2e8f0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+        .glass { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(10px); border: 1px solid rgba(148, 163, 184, 0.1); }
+        .card { border-radius: 12px; padding: 20px; transition: all 0.3s ease; }
+        .card:hover { transform: translateY(-2px); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3); }
+        .status-badge { display: inline-block; padding: 6px 14px; border-radius: 9999px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+        .status-active { background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .status-blocked { background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); }
+        .status-inprogress { background: rgba(59, 130, 246, 0.2); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.3); }
+        .progress-bar { height: 8px; border-radius: 4px; background: rgba(148, 163, 184, 0.2); overflow: hidden; margin: 8px 0; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, #3b82f6, #10b981); transition: width 0.5s ease; }
+        .task-item { padding: 14px; border-left: 3px solid var(--color-info); background: rgba(59, 130, 246, 0.05); border-radius: 6px; margin-bottom: 10px; }
+        .task-item.completed { border-left-color: var(--color-success); background: rgba(16, 185, 129, 0.05); }
+        .task-item.blocked { border-left-color: var(--color-critical); background: rgba(239, 68, 68, 0.05); }
+        .metric { text-align: center; padding: 16px; border-radius: 8px; background: rgba(148, 163, 184, 0.05); }
+        .metric-value { font-size: 28px; font-weight: bold; color: #3b82f6; }
+        .metric-label { font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 6px; }
+        .tech-badge { display: inline-block; padding: 4px 10px; border-radius: 4px; background: rgba(59, 130, 246, 0.1); color: #3b82f6; font-size: 11px; margin-right: 6px; margin-bottom: 6px; font-weight: 500; }
+        .code-block { background: #1e293b; padding: 14px; border-radius: 6px; border: 1px solid rgba(148, 163, 184, 0.2); font-family: 'Monaco', 'Courier New', monospace; font-size: 12px; color: #94a3b8; overflow-x: auto; margin: 10px 0; line-height: 1.5; }
+        .timeline-item { display: flex; gap: 16px; margin-bottom: 20px; position: relative; }
+        .timeline-item::before { content: ''; position: absolute; left: 15px; top: 30px; width: 2px; height: calc(100% + 20px); background: rgba(59, 130, 246, 0.3); }
+        .timeline-item:last-child::before { display: none; }
+        .timeline-dot { width: 32px; height: 32px; border-radius: 50%; background: rgba(59, 130, 246, 0.2); border: 2px solid #3b82f6; display: flex; align-items: center; justify-content: center; flex-shrink: 0; z-index: 1; }
+        .timeline-dot.completed { background: rgba(16, 185, 129, 0.2); border-color: #10b981; }
+        .timeline-content { flex: 1; }
+        .risk-high { border-left: 3px solid #ef4444; background: rgba(239, 68, 68, 0.05); padding: 12px; border-radius: 6px; margin: 8px 0; }
+        .risk-medium { border-left: 3px solid #f59e0b; background: rgba(245, 158, 11, 0.05); padding: 12px; border-radius: 6px; margin: 8px 0; }
+        .risk-low { border-left: 3px solid #10b981; background: rgba(16, 185, 129, 0.05); padding: 12px; border-radius: 6px; margin: 8px 0; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div class="min-h-screen p-8">
+        <div class="max-w-7xl mx-auto">
+            
+            <!-- HEADER -->
+            <div class="mb-12">
+                <div class="flex justify-between items-start mb-4">
+                    <div>
+                        <h1 class="text-4xl font-bold mb-2">🧠 Echo Oncology</h1>
+                        <p class="text-gray-400">Surgical Intelligence Platform — Mission Control Dashboard</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-sm text-gray-500">Sprint 1: E2E Pipeline Validation</p>
+                        <p class="text-sm text-gray-500">Started: May 29, 2026</p>
+                    </div>
+                </div>
+                <p class="text-gray-400 text-sm">Real-time status tracking, blockers, and gap analysis for Phase 1 algorithm validation (6 months)</p>
+            </div>
+            
+            <!-- QUICK STATS -->
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
+                <div class="glass card">
+                    <div class="metric">
+                        <div class="metric-value">40%</div>
+                        <div class="metric-label">Overall Completion</div>
+                    </div>
+                </div>
+                <div class="glass card">
+                    <div class="metric">
+                        <div class="metric-value">5/5</div>
+                        <div class="metric-label">Tech Layers Designed</div>
+                    </div>
+                </div>
+                <div class="glass card">
+                    <div class="metric">
+                        <div class="metric-value">3</div>
+                        <div class="metric-label">Critical Blockers</div>
+                    </div>
+                </div>
+                <div class="glass card">
+                    <div class="metric">
+                        <div class="metric-value">2 wks</div>
+                        <div class="metric-label">Sprint 1 Duration</div>
+                    </div>
+                </div>
+                <div class="glass card">
+                    <div class="metric">
+                        <div class="metric-value">≥95%</div>
+                        <div class="metric-label">Dice Target</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- SPRINT 1: E2E PIPELINE VALIDATION -->
+            <div class="glass card mb-8">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold">📋 Sprint 1: E2E Pipeline Validation</h2>
+                    <span class="status-badge status-inprogress">IN PROGRESS</span>
+                </div>
+                
+                <div class="mb-6">
+                    <p class="text-sm text-gray-300 mb-4">
+                        <strong>Goal:</strong> Load BraTS case → segment → generate mesh → render in viewer (5 complete end-to-end cases)
+                    </p>
+                    <div class="progress-bar"><div class="progress-fill" style="width: 0%"></div></div>
+                    <p class="text-xs text-gray-400 mt-2">Estimated effort: 4–6 days</p>
+                </div>
+                
+                <!-- WEEK 1: PIPELINE INFRASTRUCTURE -->
+                <div class="mb-8">
+                    <h3 class="text-lg font-semibold mb-4 text-blue-400">📅 Week 1: Pipeline Infrastructure</h3>
+                    <div class="space-y-3">
+                        
+                        <!-- Task 1: DICOM Loader Test -->
+                        <div class="task-item">
+                            <div class="flex justify-between items-start">
+                                <div class="flex-1">
+                                    <p class="font-semibold">1️⃣ Test DICOM Loader (nibabel)</p>
+                                    <p class="text-sm text-gray-400 mt-1">Validate DICOM reading on BraTS NIfTI files. Test on 3 sample cases.</p>
+                                    <div class="code-block">
+import nibabel as nib<br>
+img = nib.load('case.nii.gz')<br>
+seg = nib.load('case_seg.nii.gz')<br>
+print(f"Shape: {img.get_fdata().shape}")<br>
+print(f"Dtype: {img.get_fdata().dtype}")
+                                    </div>
+                                    <div class="flex gap-2 mt-2">
+                                        <span class="tech-badge">nibabel</span>
+                                        <span class="tech-badge">BraTS</span>
+                                        <span class="tech-badge">NIfTI</span>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <span class="text-xs bg-yellow-900 text-yellow-200 px-2 py-1 rounded block mb-2">1-2 hrs</span>
+                                    <span class="status-badge status-inprogress">TODO</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Task 2: nnU-Net Inference -->
+                        <div class="task-item">
+                            <div class="flex justify-between items-start">
+                                <div class="flex-1">
+                                    <p class="font-semibold">2️⃣ Integrate nnU-Net Inference</p>
+                                    <p class="text-sm text-gray-400 mt-1">Download HuggingFace model, run inference on BraTS volume. Validate output mask shape.</p>
+                                    <div class="code-block">
+from transformers import AutoModel<br>
+import torch<br>
+model = AutoModel.from_pretrained('isensee/nnunet_brats')<br>
+model.eval()<br>
+with torch.no_grad():<br>
+    segmentation = model(torch.from_numpy(img_array))
+                                    </div>
+                                    <div class="flex gap-2 mt-2">
+                                        <span class="tech-badge">PyTorch</span>
+                                        <span class="tech-badge">nnU-Net</span>
+                                        <span class="tech-badge">HuggingFace</span>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <span class="text-xs bg-yellow-900 text-yellow-200 px-2 py-1 rounded block mb-2">2-3 hrs</span>
+                                    <span class="status-badge status-inprogress">TODO</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Task 3: Mesh Generation -->
+                        <div class="task-item">
+                            <div class="flex justify-between items-start">
+                                <div class="flex-1">
+                                    <p class="font-semibold">3️⃣ Mesh Generation (Marching Cubes)</p>
+                                    <p class="text-sm text-gray-400 mt-1">Convert segmentation mask → 3D mesh. Export as glTF for Three.js.</p>
+                                    <div class="code-block">
+from skimage.measure import marching_cubes<br>
+import trimesh<br>
+vertices, faces = marching_cubes(seg_mask, level=0)<br>
+mesh = trimesh.Trimesh(vertices=vertices, faces=faces)<br>
+mesh.export('brain.glb')
+                                    </div>
+                                    <div class="flex gap-2 mt-2">
+                                        <span class="tech-badge">scikit-image</span>
+                                        <span class="tech-badge">trimesh</span>
+                                        <span class="tech-badge">glTF</span>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <span class="text-xs bg-yellow-900 text-yellow-200 px-2 py-1 rounded block mb-2">1-2 hrs</span>
+                                    <span class="status-badge status-inprogress">TODO</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Task 4: Three.js Integration -->
+                        <div class="task-item">
+                            <div class="flex justify-between items-start">
+                                <div class="flex-1">
+                                    <p class="font-semibold">4️⃣ Wire to Three.js Viewer</p>
+                                    <p class="text-sm text-gray-400 mt-1">Load generated glTF mesh in browser. Test 360° rotation, lighting, material properties.</p>
+                                    <div class="code-block">
+const loader = new THREE.GLTFLoader();<br>
+loader.load('brain.glb', (gltf) =&gt; {<br>
+  scene.add(gltf.scene);<br>
+  // Add lighting, materials<br>
+});
+                                    </div>
+                                    <div class="flex gap-2 mt-2">
+                                        <span class="tech-badge">Three.js</span>
+                                        <span class="tech-badge">WebGL</span>
+                                        <span class="tech-badge">React</span>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <span class="text-xs bg-yellow-900 text-yellow-200 px-2 py-1 rounded block mb-2">1-2 hrs</span>
+                                    <span class="status-badge status-inprogress">TODO</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Task 5: BraTS Demo -->
+                        <div class="task-item">
+                            <div class="flex justify-between items-start">
+                                <div class="flex-1">
+                                    <p class="font-semibold">5️⃣ Demo on 5 BraTS Cases</p>
+                                    <p class="text-sm text-gray-400 mt-1">End-to-end test: load → segment → mesh → render. Validate output quality.</p>
+                                    <p class="text-xs text-gray-500 mt-2">Test cases: BraTS21_00000, BraTS21_00001, BraTS21_00005, BraTS21_00010, BraTS21_00100</p>
+                                    <div class="flex gap-2 mt-2">
+                                        <span class="tech-badge">QA</span>
+                                        <span class="tech-badge">Validation</span>
+                                        <span class="tech-badge">Demo</span>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <span class="text-xs bg-yellow-900 text-yellow-200 px-2 py-1 rounded block mb-2">2-3 hrs</span>
+                                    <span class="status-badge status-inprogress">TODO</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- WEEK 2: VALIDATION & TESTING -->
+                <div class="mb-8">
+                    <h3 class="text-lg font-semibold mb-4 text-blue-400">📅 Week 2: Validation & Testing</h3>
+                    <div class="space-y-3">
+                        
+                        <div class="task-item">
+                            <div class="flex justify-between items-start">
+                                <div class="flex-1">
+                                    <p class="font-semibold">6️⃣ Run Full BraTS Validation</p>
+                                    <p class="text-sm text-gray-400 mt-1">Execute pipeline on first 100 BraTS cases. Measure Dice score, sensitivity, specificity.</p>
+                                    <div class="flex gap-2 mt-2">
+                                        <span class="tech-badge">Metrics</span>
+                                        <span class="tech-badge">Benchmark</span>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <span class="text-xs bg-yellow-900 text-yellow-200 px-2 py-1 rounded block mb-2">4-6 hrs</span>
+                                    <span class="status-badge status-inprogress">TODO</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="task-item">
+                            <div class="flex justify-between items-start">
+                                <div class="flex-1">
+                                    <p class="font-semibold">7️⃣ Error Analysis</p>
+                                    <p class="text-sm text-gray-400 mt-1">Identify failure cases. Document edge cases (brain shift, artifacts, tumor size variance).</p>
+                                    <div class="flex gap-2 mt-2">
+                                        <span class="tech-badge">Analysis</span>
+                                        <span class="tech-badge">Documentation</span>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <span class="text-xs bg-yellow-900 text-yellow-200 px-2 py-1 rounded block mb-2">2-3 hrs</span>
+                                    <span class="status-badge status-inprogress">TODO</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="task-item">
+                            <div class="flex justify-between items-start">
+                                <div class="flex-1">
+                                    <p class="font-semibold">8️⃣ Documentation & Demo Ready</p>
+                                    <p class="text-sm text-gray-400 mt-1">Write technical documentation. Prepare demo assets for presentation.</p>
+                                    <div class="flex gap-2 mt-2">
+                                        <span class="tech-badge">Documentation</span>
+                                        <span class="tech-badge">Demo</span>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <span class="text-xs bg-yellow-900 text-yellow-200 px-2 py-1 rounded block mb-2">3-4 hrs</span>
+                                    <span class="status-badge status-inprogress">TODO</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- SPRINT 1 DELIVERABLE -->
+                <div class="glass p-4 rounded-lg border border-green-500 bg-green-900 bg-opacity-10">
+                    <p class="text-sm font-semibold text-green-400 mb-2">✓ Sprint 1 Deliverable</p>
+                    <ul class="text-sm text-gray-300 space-y-1">
+                        <li>• Working E2E pipeline: DICOM → segment → mesh → Three.js render</li>
+                        <li>• Validation metrics on 100 BraTS cases (Dice, sensitivity, specificity)</li>
+                        <li>• Live demo with 5 high-quality cases</li>
+                        <li>• GitHub branch with production-ready code + tests</li>
+                        <li>• Technical documentation (architecture, API, edge cases)</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- CRITICAL BLOCKERS -->
+            <div class="glass card mb-8">
+                <h2 class="text-2xl font-bold mb-6">🚨 Critical Blockers & Dependencies</h2>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    
+                    <div class="glass p-4 rounded border border-red-900">
+                        <p class="font-semibold text-red-400 mb-2">Blocker #1: DICOM Loader Test</p>
+                        <p class="text-sm text-gray-400 mb-3">Code exists but untested. Edge cases: file corruption, missing headers, unusual voxel spacing.</p>
+                        <p class="text-xs text-gray-500">Impact: High | Effort: 1-2 hrs | Risk: Low (BraTS is clean)</p>
+                    </div>
+                    
+                    <div class="glass p-4 rounded border border-red-900">
+                        <p class="font-semibold text-red-400 mb-2">Blocker #2: Segmentation Pipeline</p>
+                        <p class="text-sm text-gray-400 mb-3">Folder exists, no logic. Need to wire nnU-Net inference + mask generation.</p>
+                        <p class="text-xs text-gray-500">Impact: High | Effort: 2-4 hrs | Risk: Low (standard PyTorch)</p>
+                    </div>
+                    
+                    <div class="glass p-4 rounded border border-red-900">
+                        <p class="font-semibold text-red-400 mb-2">Blocker #3: Mesh Generation Test</p>
+                        <p class="text-sm text-gray-400 mb-3">Marching cubes algorithm standard, but glTF export untested. Vertex/face generation validation.</p>
+                        <p class="text-xs text-gray-500">Impact: Medium | Effort: 1-2 hrs | Risk: Low (standard library)</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- TECH STACK -->
+            <div class="glass card mb-8">
+                <h2 class="text-2xl font-bold mb-6">🛠 Tech Stack for Sprint 1</h2>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div>
+                        <h3 class="font-semibold text-blue-400 mb-3">Python Backend (Radiomics Pipeline)</h3>
+                        <div class="space-y-2 text-sm text-gray-300">
+                            <p><span class="font-semibold">DICOM Loading:</span> nibabel, SimpleITK</p>
+                            <p><span class="font-semibold">ML Inference:</span> PyTorch, HuggingFace Transformers</p>
+                            <p><span class="font-semibold">Image Processing:</span> scikit-image, numpy</p>
+                            <p><span class="font-semibold">Mesh Generation:</span> trimesh, open3d</p>
+                            <p><span class="font-semibold">Testing:</span> pytest, pytest-cov</p>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <h3 class="font-semibold text-blue-400 mb-3">Frontend (3D Visualization)</h3>
+                        <div class="space-y-2 text-sm text-gray-300">
+                            <p><span class="font-semibold">Framework:</span> Next.js 14 + React 18</p>
+                            <p><span class="font-semibold">3D Rendering:</span> Three.js + WebGL</p>
+                            <p><span class="font-semibold">UI Components:</span> TailwindCSS, TypeScript</p>
+                            <p><span class="font-semibold">File Upload:</span> React Dropzone</p>
+                            <p><span class="font-semibold">Testing:</span> Jest, React Testing Library</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- DEPENDENCIES & SETUP -->
+            <div class="glass card mb-8">
+                <h2 class="text-2xl font-bold mb-6">📦 Setup & Dependencies</h2>
+                
+                <h3 class="font-semibold text-blue-400 mb-3">Python Environment</h3>
+                <div class="code-block">
+python -m venv echo-oncology-venv<br>
+source echo-oncology-venv/bin/activate<br>
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu<br>
+pip install transformers huggingface-hub nibabel SimpleITK scikit-image trimesh open3d<br>
+pip install pytest pytest-cov black flake8
+                </div>
+                
+                <h3 class="font-semibold text-blue-400 mb-3 mt-6">Download BraTS Dataset</h3>
+                <div class="code-block">
+# BraTS 2021 publicly available at:<br>
+# https://www.synapse.org/#!Synapse:syn25829067/wiki/610865<br>
+# Download ~6.5GB, extract to ./data/brats/<br>
+# Structure:<br>
+# ./data/brats/BraTS21_00000/BraTS21_00000_t1.nii.gz<br>
+# ./data/brats/BraTS21_00000/BraTS21_00000_seg.nii.gz
+                </div>
+                
+                <h3 class="font-semibold text-blue-400 mb-3 mt-6">Model Download</h3>
+                <div class="code-block">
+python -c "from transformers import AutoModel; AutoModel.from_pretrained('isensee/nnunet_brats', cache_dir='./models')"
+                </div>
+            </div>
+            
+            <!-- PHASE 1 ROADMAP CONTEXT -->
+            <div class="glass card">
+                <h2 class="text-2xl font-bold mb-6">📍 Phase 1 Context (6 Months)</h2>
+                
+                <div class="space-y-6">
+                    <div class="timeline-item">
+                        <div class="timeline-dot completed">1</div>
+                        <div class="timeline-content">
+                            <p class="font-semibold text-green-400">Weeks 1–2: E2E Pipeline Validation ← YOU ARE HERE</p>
+                            <p class="text-sm text-gray-400">Load BraTS → segment → mesh → render. Validate on 100 cases.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="timeline-item">
+                        <div class="timeline-dot">2</div>
+                        <div class="timeline-content">
+                            <p class="font-semibold">Weeks 3–6: Radiomics Publication</p>
+                            <p class="text-sm text-gray-400">Run full BraTS validation (2,251 cases), write manuscript, submit to journal.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="timeline-item">
+                        <div class="timeline-dot">3</div>
+                        <div class="timeline-content">
+                            <p class="font-semibold">Weeks 7–12: Surgeon Usability Study</p>
+                            <p class="text-sm text-gray-400">Build trajectory planning UI, recruit surgeons, run sessions, analyze feedback (≥4.5/5 target).</p>
+                        </div>
+                    </div>
+                    
+                    <div class="timeline-item">
+                        <div class="timeline-dot">4</div>
+                        <div class="timeline-content">
+                            <p class="font-semibold">Weeks 13–24: Regulatory & Ethics</p>
+                            <p class="text-sm text-gray-400">IRB approval, FDA Class II confirmation, Helen Wheeler partnership formalized.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Simple progress tracking
+        const completedTasks = 0;
+        const totalTasks = 8;
+        const completion = (completedTasks / totalTasks) * 100;
+        document.querySelector('.progress-fill').style.width = completion + '%';
+    </script>
+</body>
+</html>
